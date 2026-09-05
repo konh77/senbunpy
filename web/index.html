@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>千分の一の国 — 立法シミュレータ</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%228%22%20fill%3D%22%23FE806F%22%20stroke%3D%22%23000%22%20stroke-width%3D%223%22%2F%3E%3Ctext%20x%3D%2216%22%20y%3D%2223%22%20font-size%3D%2219%22%20font-family%3D%22sans-serif%22%20font-weight%3D%22900%22%20text-anchor%3D%22middle%22%20fill%3D%22%23000%22%3E%E5%8D%83%3C%2Ftext%3E%3C%2Fsvg%3E">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div id="synthetic-banner" class="banner" hidden>
+  <strong>合成データ</strong>
+  <span>エンジン未実装のため、でたらめな数字を描画しています。提出資料に使わないでください。</span>
+</div>
+
+<header class="topbar">
+  <div class="wordmark">
+    <h1>千分の<em>一</em>の国</h1>
+  </div>
+  <nav class="nav">
+    <div class="ab" id="ab" hidden style="display:flex;gap:7px">
+      <button type="button" class="pill" data-v="baseline">法律なし</button>
+      <button type="button" class="pill pill-coral on" data-v="treatment">施行後</button>
+    </div>
+    <button id="view-toggle" class="pill pill-lav" type="button">表で見る</button>
+    <button id="about-open" class="pill pill-lime" type="button">この作品について</button>
+  </nav>
+</header>
+
+<section class="stage">
+  <div class="town-wrap" id="town-wrap">
+    <canvas id="town"></canvas>
+
+    <div class="gazette" id="gazette">
+      <div class="gz-head">
+        <span class="gz-seal">官報</span>
+        <span class="gz-no" id="law-no">法律 第—号</span>
+        <button class="gz-fold" id="gz-fold" type="button" aria-label="折りたたむ">▾</button>
+      </div>
+      <div class="gz-body" id="gz-body">
+        <div class="presets" id="presets"></div>
+        <textarea id="law" spellcheck="false" aria-label="法律のソース"
+          placeholder="法律 &quot;名前&quot; {&#10;  効果 {&#10;    税率変更: 消費税(その他) 10% → 12%&#10;  }&#10;}"></textarea>
+
+        <div id="error" class="error" hidden>
+          <div class="error-head">
+            <span id="error-kind" class="error-kind"></span>
+            <span id="error-pos" class="mono"></span>
+          </div>
+          <p id="error-message"></p>
+          <pre id="error-snippet" class="snippet" hidden></pre>
+          <p id="error-hint" class="hint" hidden></p>
+        </div>
+
+        <div id="warnings" class="warnings" hidden>
+          <p class="warnings-head">警告 — 実行はされています</p>
+          <ul id="warnings-list"></ul>
+        </div>
+
+      </div>
+
+      <!-- 主操作。本文が長くてもスクロールに隠れないよう下部に固定する -->
+      <div class="gz-foot">
+        <div class="controls">
+          <label class="field"><span class="lbl">期間</span>
+            <select id="months">
+              <option value="36">36ヶ月</option>
+              <option value="60" selected>60ヶ月</option>
+              <option value="120">120ヶ月</option>
+            </select>
+          </label>
+          <label class="field"><span class="lbl">Seed</span>
+            <input id="seed" type="number" value="42" min="0" step="1">
+          </label>
+          <button id="run" class="enact" type="button">施行</button>
+        </div>
+        <p id="status">未実行</p>
+      </div>
+    </div>
+
+    <div class="side">
+    <div class="hud" id="hud">
+      <div class="hud-date"><span id="hud-year">0</span><i>年</i><span id="hud-mon">1</span><i>月</i></div>
+      <div class="hud-phase" id="hud-phase">労働</div>
+      <ul class="hud-stats">
+        <li id="li-unemp"><i>失業率</i><b id="hud-unemp">—</b></li>
+        <li><i>物価</i><b id="hud-cpi">—</b></li>
+        <li><i>ジニ</i><b id="hud-gini">—</b></li>
+      </ul>
+    </div>
+
+    <div class="ledger" id="ledger">
+      <div class="ledger-h">今月の台帳<i id="ledger-sum">—</i></div>
+      <div id="ledger-rows"></div>
+      <div class="ledger-h">口座残高</div>
+      <div id="ledger-acc"></div>
+      <div class="ledger-h">人口<i id="ledger-life">—</i></div>
+    </div>
+    </div>
+
+    <p class="viewhint" id="viewhint">ドラッグで見て回る<span>/</span>ホイールで拡大</p>
+
+    <div class="stamp" id="stamp" hidden><span id="stamp-name">施行</span></div>
+  </div>
+
+  <div class="timeline" id="timeline">
+    <button id="play" class="tl-play" type="button" aria-label="再生/停止">❚❚</button>
+    <input id="scrub" type="range" min="0" max="59" value="0" aria-label="月">
+    <span class="tl-read" id="tl-read">0 / 60ヶ月</span>
+    <label class="tl-speed">速さ
+      <select id="speed">
+        <option value="1">×1</option>
+        <option value="2">×2</option>
+        <option value="5">×5</option>
+        <option value="10">×10</option>
+      </select>
+    </label>
+  </div>
+</section>
+
+<section class="report" id="report">
+  <div class="rp-head">
+    <h2>国の成績表</h2><span class="en">Report</span>
+    <div class="legend" id="legend" hidden>
+      <span class="legend-item"><span class="swatch swatch-base"></span>法律なし</span>
+      <span class="legend-item"><span class="swatch swatch-treat"></span>施行後</span>
+    </div>
+  </div>
+  <p class="note">先頭12ヶ月は初期化の揺れ(ウォームアップ)。網掛けの区間は指標として読まない。</p>
+  <div id="charts" class="charts"></div>
+  <div id="table-view" class="table-view" hidden></div>
+</section>
+
+
+<div class="about" id="about" hidden>
+  <div class="about-sheet" role="dialog" aria-label="この作品について">
+    <button class="about-close" id="about-close" type="button" aria-label="閉じる">×</button>
+
+    <h2 class="about-title">千分の<em>一</em>の国</h2>
+    <p class="about-lead">
+      日本を千分の一に縮めた国を用意して、<strong>そこに法律を施行したら何が起きるか</strong>を見る装置です。
+      人口124,000人・世帯およそ60,000・企業200。
+      <strong>扱うのは経済の話だけです。</strong>税金・給付・消費・貯蓄・相続といった、お金が動く話しか計算しません。
+      外交も、教育の中身も、治安も、環境も、この国には存在しません。
+    </p>
+
+    <section class="about-sec">
+      <h3><span class="n">01</span>できること</h3>
+      <p>
+        左の官報に法律を書いて「施行」を押すと、<strong>同じ乱数の種で「法律なし」と「施行後」の2つの世界</strong>を回し、
+        並べて比べます。世界の違いは法律の有無だけです。
+      </p>
+      <ul>
+        <li><b>税率変更</b> — 消費税・所得税・相続税の率を変える(相続税は基礎控除も)</li>
+        <li><b>給付</b> — 条件に当てはまる世帯にお金を配る</li>
+        <li><b>禁止</b> — 特定の支出を禁じる(執行率つき)</li>
+      </ul>
+      <p class="muted">
+        この3つ以外は「シミュレーション範囲外です」と<strong>理由を付けて断ります</strong>。
+        「外交」と書けば「国外がこの模型に存在しません」と返します。
+        それらしい数字を返さないことを設計の方針にしています。
+      </p>
+    </section>
+
+    <section class="about-sec">
+      <h3><span class="n">02</span>書き方(仕様)</h3>
+
+      <p>まず、動く例をひとつ。子どものいる世帯に毎月15,000円を配る法律です。</p>
+      <pre>法律 "こども未来給付法" {
+  対象: 世帯 where 子ども数 &gt;= 1
+  効果 {
+    給付: 15000円/月 × 子ども数
+  }
+  財源: 所得税(+1%)
+}</pre>
+
+      <p>形はいつも同じです。<code>法律</code> と名前と波括弧、その中に<b>節</b>を並べます。</p>
+      <pre>// 骨組み
+法律 "名前" {
+  節
+  節
+}</pre>
+
+      <p><b>節は6種類。順番は自由。<code>効果</code> だけが必須で、他は省略できます。</b></p>
+      <table class="about-table">
+        <tr><th>節</th><th>書き方</th><th>省略したら</th></tr>
+        <tr><td>対象</td><td><code>対象: 世帯 where 子ども数 &gt;= 1</code></td><td>全員が対象</td></tr>
+        <tr><td>効果</td><td><code>効果 { … }</code></td><td><b>必須</b>。無いとエラー</td></tr>
+        <tr><td>財源</td><td><code>財源: 所得税(+1%)</code></td><td>国債扱い。警告が出る</td></tr>
+        <tr><td>執行率</td><td><code>執行率: 80%</code></td><td>100%(完全に守られる)</td></tr>
+        <tr><td>施行</td><td><code>施行: 6ヶ月後</code></td><td>すぐ(慣らし運転の直後)</td></tr>
+      </table>
+
+      <h4>対象 — 誰に効くか</h4>
+      <p><code>対象: 種類</code> または <code>対象: 種類 where 条件</code>。種類は3つだけです。</p>
+      <table class="about-table">
+        <tr><th>種類</th><th>使える属性</th><th>単位</th></tr>
+        <tr><td>人</td><td>年齢</td><td>歳(省略可)</td></tr>
+        <tr><td>人</td><td>所得</td><td>円</td></tr>
+        <tr><td>世帯</td><td>子ども数</td><td>なし</td></tr>
+        <tr><td>世帯</td><td>世帯人員</td><td>人</td></tr>
+        <tr><td>世帯</td><td>所得 / 貯蓄</td><td>円</td></tr>
+        <tr><td>企業</td><td>業種</td><td>なし</td></tr>
+      </table>
+      <p>
+        比べ方は <code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code>
+        <code>==</code> <code>!=</code> の6つ。
+        条件は <code>かつ</code> <code>または</code> でつなげられます。
+        <b>優先順位はありません。左から順に読みます</b>ので、
+        <code>A かつ B または C</code> は <code>(A かつ B) または C</code> です。
+      </p>
+      <p class="muted">
+        人を対象にしても、お金は世帯の財布で動きます。「18歳未満に給付」は
+        <b>その子がいる世帯の口座に振り込まれます</b>。
+      </p>
+
+      <h4>効果 — 何をするか</h4>
+      <p><code>効果 { … }</code> の中に1つ以上。<b>できるのは次の3つだけです。</b></p>
+      <table class="about-table">
+        <tr><th>効果</th><th>書き方</th><th>意味</th></tr>
+        <tr><td>税率変更</td><td><code>税率変更: 消費税(食料品) 8% → 0%</code></td>
+            <td>その品目の税率を変える</td></tr>
+        <tr><td>税率変更</td><td><code>税率変更: 消費税 10% → 12%</code></td>
+            <td>品目を書かなければ標準税率</td></tr>
+        <tr><td>税率変更</td><td><code>税率変更: 所得税 10% → 12%</code></td>
+            <td>累進表の<b>全段に一律で足す</b></td></tr>
+        <tr><td>税率変更</td><td><code>税率変更: 相続税(基礎控除) 4200万円 → 1000万円</code></td>
+            <td>控除額を変える(ここだけ金額)</td></tr>
+        <tr><td>給付</td><td><code>給付: 15000円/月</code></td><td>世帯に定額</td></tr>
+        <tr><td>給付</td><td><code>給付: 15000円/月 × 子ども数</code></td>
+            <td>属性を掛けられる</td></tr>
+        <tr><td>禁止</td><td><code>禁止: 支出(カテゴリ=教養娯楽) &gt; 5000円/月</code></td>
+            <td>上限を超えた分が消える</td></tr>
+      </table>
+      <p>
+        税は <b>消費税・所得税・相続税</b> の3つ。
+        品目は家計調査の8分類です:<br>
+        <b>食料 / 住居 / 光熱水道 / 交通通信 / 教育 / 教養娯楽 / 保健医療 / その他</b>
+      </p>
+      <p class="muted">
+        「食料品」「食品」「娯楽」「医療」「通信」「光熱費」という言い方でも通ります。
+        8分類に無い品目を書くと、近い分類の一部として扱ったうえで<b>そう書いた警告を出します</b>。
+      </p>
+
+      <h4>財源 — お金をどこから出すか</h4>
+      <p>
+        <code>財源: 所得税(+1%)</code> のように、税と増減幅を書きます。
+        <code>財源: 国債</code> とも書けます。
+        <b>書かなくても法律は通ります</b>が、そのぶんは借金になり、
+        「国債発行として扱います。金利負担が発生します」という警告が出ます。
+      </p>
+
+      <h4>執行率 — どれくらい守られるか</h4>
+      <p>
+        <code>執行率: 80%</code> なら、上限を超えた支出の<b>8割が消え、2割はそのまま買われます</b>。
+        0〜100%の外を書くとエラーです。禁止と一緒でなければ意味がありません。
+      </p>
+
+      <h4>施行 — いつから効くか</h4>
+      <p>
+        <code>施行: 6ヶ月後</code> または <code>施行: 即日</code>。
+        起点は<b>慣らし運転(先頭12ヶ月)が終わった時点</b>です。
+        世界が落ち着く前に法律を当てると、法律の効果か慣らし運転の揺れか区別できないためです。
+      </p>
+
+      <h4>書式の約束</h4>
+      <table class="about-table">
+        <tr><th>項目</th><th>決まり</th></tr>
+        <tr><td>全角</td><td>スペース・括弧・数字・記号すべて通ります。変換ミスで落ちません</td></tr>
+        <tr><td>注釈</td><td>行頭に <code>//</code> か <code>#</code>。行末まで無視されます</td></tr>
+        <tr><td>矢印</td><td><code>→</code> でも <code>-&gt;</code> でも</td></tr>
+        <tr><td>掛け算</td><td><code>×</code> でも <code>*</code> でも</td></tr>
+        <tr><td>単位</td><td>円 / 万円 / % / ヶ月 / 年 / 人 / 歳</td></tr>
+        <tr><td>名前</td><td>必ず <code>"</code> で囲みます</td></tr>
+      </table>
+
+      <h4>間違えたとき</h4>
+      <p>何行目の何文字目かと、期待していたものと、直し方を返します。</p>
+      <pre>3行目 5文字目: '効果' の後には '{' が必要です
+  効果 給付: 15000円/月
+  　　 ^
+  ヒント: 効果は複数書けるので、必ず波括弧でまとめます</pre>
+      <p class="muted">
+        <b>この模型に無いものを書いた場合は、それらしい数字を返さずに断ります。</b>
+        「外交」なら「国外がこの模型に存在しません」、
+        「義務」なら「効果として作っていません」と、何が足りないのかを書きます。
+      </p>
+    </section>
+
+    <section class="about-sec">
+      <h3><span class="n">03</span>実際に動く3Dの街</h3>
+      <p>
+        街に立つ<strong>100体は、実際に計算されている100世帯</strong>です。
+        毎月その世帯の所得・貯蓄・困窮判定をそのまま受け取って、見た目と動きに使っています。
+        人が歩き、買い物をし、納税し、年を取って世代が入れ替わります。
+      </p>
+      <table class="about-table">
+        <tr><th>灰色の人</th><td>その月の所得がゼロの世帯(就業者も年金受給者もいない)</td></tr>
+        <tr><th>赤い人</th><td>困窮世帯。基礎バスケットすら買えず、店に行かず家にいる</td></tr>
+        <tr><th>消える人</th><td>世帯の最後の一人が死んだ。その財産は相続され、相続税がかかる</td></tr>
+        <tr><th>右上の台帳</th><td><strong>その月に台帳を通った金額そのもの。</strong>棒の長さは実額に比例</td></tr>
+      </table>
+      <p>
+        1ヶ月は<strong>エンジンに実在する5つのフェーズ</strong>がそのまま街の1日になります。
+        <b>人口</b>(加齢・出生・死亡・独立・相続)→ <b>所得</b>(給料日)→
+        <b>消費</b>(買物)→ <b>財政</b>(納税)→ <b>記録</b>(帰宅)。
+        労働と生産のフェーズは<strong>まだ作っていないので、並べていません</strong>。
+      </p>
+      <p class="muted">
+        お金は空を飛びません。<strong>人が手に持って運びます。</strong>
+        給料の硬貨を持った人が店に入ると買物袋に変わり、庁舎に入ると税として消えます。
+      </p>
+    </section>
+
+    <section class="about-sec">
+      <h3><span class="n">04</span>いちばん大事な仕組み</h3>
+      <p>
+        この模型の土台は<strong>「金は湧かない、消えない」</strong>という一点です。
+        お金が動くときは必ず、払う側と受け取る側の両方に記録します。だから全口座の合計は常にゼロになります。
+      </p>
+      <p>
+        <strong>右上の「総和 0 ✓」がそれです。</strong>毎月おわりに機械が検算し、1円でもずれたらその場で止まります。
+        税や消費の式は「現実はたぶんこう動く」という推測なので、間違っていても数字はそれらしく出てしまいます。
+        でも保存則は推測ではなく算数なので、<strong>ここだけは機械的に間違いを捕まえられます。</strong>
+      </p>
+      <p class="muted">
+        この制約から思わぬものが出ました。初期の政府債務を仮定していないのに、
+        家計の貯蓄と企業の資本を負っているのは政府しかいないという理由だけで、
+        <strong>全国換算で約1,200兆円</strong>になります。実際の日本とほぼ同じです。
+      </p>
+    </section>
+
+    <section class="about-sec">
+      <h3><span class="n">05</span>数字はどこから来たか</h3>
+      <p>
+        入力のうち<strong>出典があるのは8種類だけ</strong>です。人口推計(e-Stat API)、第23回生命表、
+        賃金構造基本統計調査、国民生活基礎調査、家計調査、所得税・相続税の速算表、現行の消費税率。
+      </p>
+      <p>
+        残りは<strong>こちらが決めた設計値で、その数は約43個</strong>あります。
+        年金月額145,000円、消費性向の上下0.95/0.55、基準生活費120,000円、国債利率1%、
+        出生率7階級、法定相続人2人など。<strong>この43個を変えれば結論は変わります。</strong>
+      </p>
+    </section>
+
+    <section class="about-sec">
+      <h3><span class="n">06</span>作り</h3>
+      <p>
+        エンジンはPythonとNumPyで、<strong>成果物はLLMを呼びません</strong>。
+        実行時の依存はFastAPI・uvicorn・pydantic・NumPyとその依存の16個だけで、
+        法律の解釈はすべて自作の構文解析器(手書きの再帰下降)が行います。
+        画面はthree.jsですが、CDNではなくリポジトリに同梱しているので、ネットに繋がっていなくても動きます。
+      </p>
+      <p>
+        コードは<strong>関数名も変数名も日本語</strong>です。<code>利子を支払う</code>、
+        <code>政府債務</code>、<code>消費税の逆進性</code>。経済の言葉のまま読めます。
+      </p>
+      <p class="muted">
+        <strong>開発にはAI(Claude)を使いました。</strong>文法の設計・仕様・検証の合格条件・統計の収集は自分で行い、
+        エンジンとDSLの実装、テスト128本、この画面はAIに書かせています。
+        当初は再帰下降パーサを自分で書く計画でしたが、実装はAIです。<strong>今後はデバッグ機能を足しながら、エンジンとDSLは自分で書き直すつもりです。</strong>
+      </p>
+    </section>
+
+    <p class="about-foot">ドラッグで街を見て回れます。ホイールで拡大。</p>
+  </div>
+</div>
+
+<div id="tooltip" class="tooltip" hidden></div>
+
+<script type="importmap">
+{ "imports": { "three": "/static/vendor/three.module.js" } }
+</script>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

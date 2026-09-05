@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# エディタ / OS
+.idea/
+.vscode/
+.DS_Store
+
+# 実行時
+*.log
+
+# 認証情報は決してコミットしない
+.env
+deploy/*.env
+*.pem
+id_*

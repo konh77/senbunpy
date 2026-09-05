@@ -1,0 +1,19 @@
+# サーバ実行に必要な最小構成。engine / dsl / server が実際に import するものだけ。
+# 統計の前処理と作図(pandas / matplotlib / openpyxl / xlrd / pillow)は入っていない。
+# それらが要るのは tools/ の下だけなので、requirements.txt をそちら用に残してある。
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.14.2
+click==8.4.2
+fastapi==0.141.1
+h11==0.16.0
+httptools==0.8.0
+idna==3.19
+numpy==2.5.1
+pydantic==2.13.4
+pydantic-core==2.46.4
+starlette==1.6.0
+typing-extensions==4.16.0
+typing-inspection==0.4.4
+uvicorn==0.52.4
+uvloop==0.22.1

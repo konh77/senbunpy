@@ -1,0 +1,18 @@
+[Unit]
+Description=千分の一の国 (senbun)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/senbun
+ExecStart=/home/ubuntu/senbun/.venv/bin/uvicorn server.app:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=3
+
+Environment=PYTHONUNBUFFERED=1
+Environment=SENBUN_MAX_CONCURRENT=2
+
+[Install]
+WantedBy=multi-user.target

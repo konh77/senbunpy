@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>千分の一の国 — 立法シミュレータ</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%228%22%20fill%3D%22%23FE806F%22%20stroke%3D%22%23000%22%20stroke-width%3D%223%22%2F%3E%3Ctext%20x%3D%2216%22%20y%3D%2223%22%20font-size%3D%2219%22%20font-family%3D%22sans-serif%22%20font-weight%3D%22900%22%20text-anchor%3D%22middle%22%20fill%3D%22%23000%22%3E%E5%8D%83%3C%2Ftext%3E%3C%2Fsvg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="synthetic-banner" class="banner" hidden>
+  <strong>合成データ</strong>
+  <span>エンジン未実装のため、でたらめな数字を描画しています。提出資料に使わないでください。</span>
+</div>
+
+<header class="topbar">
+  <div class="wordmark">
+    <h1>千分の<em>一</em>の国</h1>
+  </div>
+  <nav class="nav">
+    <div class="ab" id="ab" hidden style="display:flex;gap:7px">
+      <button type="button" class="pill" data-v="baseline">法律なし</button>
+      <button type="button" class="pill pill-coral on" data-v="treatment">施行後</button>
+    </div>
+    <button id="view-toggle" class="pill pill-lav" type="button">表で見る</button>
+    <button id="about-open" class="pill pill-lime" type="button">この作品について</button>
+  </nav>
+</header>
+
+<section class="stage">
+  <div class="town-wrap" id="town-wrap">
+    <canvas id="town"></canvas>
+
+    <div class="gazette" id="gazette">
+      <div class="gz-head">
+        <span class="gz-seal">官報</span>
+        <span class="gz-no" id="law-no">法律 第—号</span>
+        <button class="gz-fold" id="gz-fold" type="button" aria-label="折りたたむ">▾</button>
+      </div>
+      <div class="gz-body" id="gz-body">
+        <div class="presets" id="presets"></div>
+        <textarea id="law" spellcheck="false" aria-label="法律のソース"
+          placeholder="法律 &quot;名前&quot; {&#10;  効果 {&#10;    税率変更: 消費税(その他) 10% → 12%&#10;  }&#10;}"></textarea>
+
+        <div id="error" class="error" hidden>
+          <div class="error-head">
+            <span id="error-kind" class="error-kind"></span>
+            <span id="error-pos" class="mono"></span>
+          </div>
+          <p id="error-message"></p>
+          <pre id="error-snippet" class="snippet" hidden></pre>
+          <p id="error-hint" class="hint" hidden></p>
+        </div>
+
+        <div id="warnings" class="warnings" hidden>
+          <p class="warnings-head">警告 — 実行はされています</p>
+          <ul id="warnings-list"></ul>
+        </div>
+
+      </div>
+
+      <!-- 主操作。本文が長くてもスクロールに隠れないよう下部に固定する -->
+      <div class="gz-foot">
+        <div class="controls">
+          <label class="field"><span class="lbl">期間</span>
+            <select id="months">
+              <option value="36">36ヶ月</option>
+              <option value="60" selected>60ヶ月</option>
+              <option value="120">120ヶ月</option>
+            </select>
+          </label>
+          <label class="field"><span class="lbl">Seed</span>
+            <input id="seed" type="number" value="42" min="0" step="1">
+          </label>
+          <button id="run" class="enact" type="button">施行</button>
+        </div>
+        <p id="status">未実行</p>
+      </div>
+    </div>
+
+    <div class="hud" id="hud">
+      <div class="hud-date"><span id="hud-year">0</span><i>年</i><span id="hud-mon">1</span><i>月</i></div>
+      <div class="hud-phase" id="hud-phase">労働</div>
+      <ul class="hud-stats">
+        <li id="li-unemp"><i>失業率</i><b id="hud-unemp">—</b></li>
+        <li><i>物価</i><b id="hud-cpi">—</b></li>
+        <li><i>ジニ</i><b id="hud-gini">—</b></li>
+      </ul>
+    </div>
+
+    <p class="viewhint" id="viewhint">ドラッグで見て回る<span>/</span>ホイールで拡大</p>
+
+    <div class="stamp" id="stamp" hidden><span id="stamp-name">施行</span></div>
+  </div>
+
+  <div class="timeline" id="timeline">
+    <button id="play" class="tl-play" type="button" aria-label="再生/停止">❚❚</button>
+    <input id="scrub" type="range" min="0" max="59" value="0" aria-label="月">
+    <span class="tl-read" id="tl-read">0 / 60ヶ月</span>
+  </div>
+</section>
+
+<section class="report" id="report">
+  <div class="rp-head">
+    <h2>国の成績表</h2><span class="en">Report</span>
+    <div class="legend" id="legend" hidden>
+      <span class="legend-item"><span class="swatch swatch-base"></span>法律なし</span>
+      <span class="legend-item"><span class="swatch swatch-treat"></span>施行後</span>
+    </div>
+  </div>
+  <p class="note">先頭12ヶ月は初期化の揺れ(ウォームアップ)。網掛けの区間は指標として読まない。</p>
+  <div id="charts" class="charts"></div>
+  <div id="table-view" class="table-view" hidden></div>
+</section>
+
+
+<div class="about" id="about" hidden>
+  <div class="about-sheet" role="dialog" aria-label="この作品について">
+    <button class="about-close" id="about-close" type="button" aria-label="閉じる">×</button>
+
+    <h2 class="about-title">千分の<em>一</em>の国</h2>
+    <p class="about-lead">
+      日本を千分の一に縮めた国を用意して、<strong>そこに法律を施行したら何が起きるか</strong>を見る装置です。
+      人口12,400人・世帯6,000・企業200。街に立っている人ひとりが、統計上の百人ぶんにあたります。
+    </p>
+
+    <section class="about-sec">
+      <h3><span class="n">01</span>できること</h3>
+      <p>
+        左の官報に法律を書いて「施行」を押すと、<strong>同じ乱数の種で「法律なし」と「施行後」の2つの世界</strong>を回し、
+        並べて比べます。世界の違いは法律の有無だけです。
+      </p>
+      <ul>
+        <li><b>税率変更</b> — 消費税や所得税の率を変える</li>
+        <li><b>給付</b> — 条件に当てはまる世帯や人にお金を配る</li>
+        <li><b>禁止</b> — 特定の支出や行為を禁じる(執行率つき)</li>
+      </ul>
+      <p class="muted">
+        この3つ以外は「シミュレーション範囲外です」と理由を付けて断ります。
+        それらしい数字を返さないことを設計の方針にしています。
+      </p>
+    </section>
+
+    <section class="about-sec">
+      <h3><span class="n">02</span>街は飾りではない</h3>
+      <p>
+        画面の街は、計算結果の再生装置です。月ごとの数値がそのまま街の見た目になります。
+      </p>
+      <table class="about-table">
+        <tr><th>失業率</th><td>働きに出る人数。あぶれた人はハローワークに並び、頭に「求職」の札が出る</td></tr>
+        <tr><th>GDP</th><td>工場の煙突から煙が出る頻度</td></tr>
+        <tr><th>物価・ジニ係数</th><td>右上の計器に表示</td></tr>
+        <tr><th>政府債務</th><td>庁舎前の掲示板の数字</td></tr>
+      </table>
+      <p>
+        1ヶ月は6つの局面に分かれていて、そのまま街の1日になります。
+        <b>労働</b>(朝、職場へ)→ <b>生産</b>(昼)→ <b>所得</b>(給料日)→
+        <b>消費</b>(買物)→ <b>財政</b>(夜、納税)→ <b>記録</b>(帰宅)。
+      </p>
+      <p class="muted">
+        お金は空を飛びません。<strong>人が手に持って運びます。</strong>
+        給料の硬貨を持った人が店に入ると買物袋に変わり、庁舎に入ると税として消えます。
+        台帳を通るお金の動きが、そのまま人の動きとして見えるようにしてあります。
+      </p>
+    </section>
+
+    <section class="about-sec">
+      <h3><span class="n">03</span>いちばん大事な仕組み</h3>
+      <p>
+        この模型の土台は<strong>「金は湧かない、消えない」</strong>という一点です。
+        お金が動くときは必ず、払う側と受け取る側の両方に記録します。だから全口座の合計は常にゼロになります。
+      </p>
+      <p>
+        毎月おわりにこれを検算し、ずれていたらその場で止まります。
+        税や消費の式は「現実はたぶんこう動く」という推測なので、間違っていても数字はそれらしく出てしまいます。
+        でも保存則は推測ではなく算数なので、<strong>ここだけは機械的に間違いを捕まえられます。</strong>
+      </p>
+    </section>
+
+    <section class="about-sec">
+      <h3><span class="n">04</span>正直に書いておくこと</h3>
+      <ul>
+        <li>人口構成・賃金・消費の内訳は公的統計から取っています。出典は <code>docs/sources.md</code> に列挙。</li>
+        <li>一方で<b>近似も混ざっています</b>。給与所得控除を定率で代用しているため、低所得層の税を取りすぎます。</li>
+        <li>街に立つ失業者の人数は、見えるように<b>4倍に誇張</b>しています。正しい値は計器の%のほうです。</li>
+        <li>投資と純輸出はこの模型にありません。GDPは消費と政府支出だけで出しています。</li>
+      </ul>
+    </section>
+
+    <section class="about-sec">
+      <h3><span class="n">05</span>作り</h3>
+      <p>
+        エンジンはPythonとNumPyで、機械学習も外部APIも使っていません。
+        法律を読む部分は手書きの再帰下降パーサで、構文解析のライブラリを使っていません。
+        画面はブラウザ上のthree.jsですが、CDNではなくリポジトリに同梱しているので、
+        ネットに繋がっていなくても動きます。
+      </p>
+    </section>
+
+    <p class="about-foot">ドラッグで街を見て回れます。ホイールで拡大。</p>
+  </div>
+</div>
+
+<div id="tooltip" class="tooltip" hidden></div>
+
+<script type="importmap">
+{ "imports": { "three": "vendor/three.module.js" } }
+</script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
